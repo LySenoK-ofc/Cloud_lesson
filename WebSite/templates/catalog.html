@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Каталог - Digital Gallery</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        button {
+         width: 50;
+         padding: 10px;
+         border: none;
+         border-radius: 5px;
+         background: #bbb;
+         color: #2e2e2e;
+         font-weight: bold;
+         cursor: pointer;
+         transition: background 0.3s;
+        }
+        button:hover {
+         background: #999;
+        }
+        /* Контейнер чекбокса */
+        .checkbox-container {
+          display: flex;
+          align-items: left;
+          margin-bottom: 3px;
+          cursor: default;
+        }
+
+        /* Сам чекбокс */
+        .checkbox-container input[type="checkbox"] {
+          appearance: none;
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          width: 25px;
+          height: 25px;
+          border: 2px solid #2e2e2e;
+          border-radius: 4px;
+          margin-right: 10px;
+          position: relative;
+          outline: none;
+          cursor: pointer;
+          transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        /* Стили при активации чекбокса */
+        .checkbox-container input[type="checkbox"]:checked {
+          background: linear-gradient(135deg, #bbb, #999999);
+        }
+
+        /* Текст рядом с чекбоксом */
+        .checkbox-container label {
+          cursor: pointer;
+          color: #cccccc;
+          font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+<!-- Меню -->
+{% include 'header.html' %}
+
+<!-- Форма фильтрации -->
+<form id="filterForm" method="get" action="{{ url_for('catalog') }}">
+    <section class="reveal" id="filterSection" style="z-index: 10;">
+        <h2>Фильтрация произведений</h2>
+        <div class="filter-group">
+            <label for="titleInput">По названию:</label>
+            <div style="position: relative;">
+                <input
+                        type="text"
+                        id="titleInput"
+                        name="title"
+                        autocomplete="off"
+                        placeholder="Начните вводить название…"
+                        value="{{ title or '' }}"
+                />
+                <ul id="titles-suggestions" class="suggestions" hidden></ul>
+            </div>
+
+            <label for="authorInput">По автору:</label>
+            <div style="position: relative;">
+                <input
+                        type="text"
+                        id="authorInput"
+                        name="author"
+                        autocomplete="off"
+                        placeholder="Начните вводить автора…"
+                        value="{{ author or '' }}"
+                />
+                <ul id="authors-suggestions" class="suggestions" hidden></ul>
+            </div>
+
+            <label for="categoriesInput">По категории:</label>
+            <div style="position: relative;">
+                <input
+                        type="text"
+                        id="categoriesInput"
+                        name="categories"
+                        autocomplete="off"
+                        placeholder="Начните вводить категорию…"
+                        value="{{ categories or '' }}"
+                />
+                <ul id="categories-suggestions" class="suggestions" hidden></ul>
+            </div>
+            <div class="checkbox-container">
+                <input type="checkbox" id="top_filter" name="top_filter" value="on"
+                       {% if top_filter %}checked{% endif %}>
+                <label for="top_filter">Сначала популярные</label>
+            </div>
+        </div>
+    </section>
+</form>
+
+<!-- Секция с произведениями -->
+<section class="reveal" id="worksSection" style="padding: 50px 30px 50px;">
+    <h2>Произведения</h2>
+    <div class="works-grid">
+        {% for work in works %}
+        <div class="work-card">
+            <a href="{{ url_for('artwork', art_id=work.id) }}">
+                <img src="{{ url_for('static', filename='img/arts/' ~ work.id ~ work.extension) }}">
+            </a>
+            <div class="info">
+                <h3>{{work.name}}</h3>
+                <p>Автор: {{work.creator_user.nick_name}}</p>
+                <p>Цена: {{work.price}} coins</p>
+                <p>Описание: {{work.short_description}}.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+
+<script>
+    window.addEventListener("load", () => {
+      const reveals = document.querySelectorAll(".reveal");
+      reveals.forEach(el => {
+        el.classList.add("active");
+      });
+    });
+    // Реагирование на чекбокс
+    const checkbox = document.getElementById("top_filter");
+    const form = document.getElementById("filterForm");
+
+    checkbox.addEventListener("change", () => {
+        form.submit();
+    });
+
+    // Реагирование на нажатие Enter
+    const inputs = ['titleInput', 'authorInput', 'categoriesInput'];
+
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            form.submit();
+          }
+        });
+    });
+
+// Данные из сервера
+  const allTitles     = {{ allTitles|tojson }};
+  const allAuthors    = {{ allAuthors|tojson }};
+  const allCategories = {{ allCategories|tojson }};
+
+  // Универсальная функция для fields с много‑токенным вводом через запятую
+  function setupMultiSuggest(inputId, suggId, dataArray) {
+    const input    = document.getElementById(inputId);
+    const suggList = document.getElementById(suggId);
+
+    // Разбивает значение на префикс (всё до последней запятой)
+    // и token (последний незакрытый токен)
+    function splitValue(val) {
+      const parts = val.split(',');
+      return {
+        prefix: parts.slice(0, -1).join(',').trim(),
+        token: parts.pop().trim()
+      };
+    }
+
+    // Рисует подсказки из массива вариантов arr
+    function showSuggestions(arr) {
+      suggList.innerHTML = '';
+      if (!arr.length) {
+        suggList.hidden = true;
+        return;
+      }
+      for (const item of arr) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        li.addEventListener('mousedown', () => {
+          const { prefix } = splitValue(input.value);
+          // вставляем выбранный токен и добавляем запятую‑пробел
+          input.value = prefix
+            ? `${prefix}, ${item}, `
+            : `${item}, `;
+          // и сразу перерисовываем для пустого токена
+          updateSuggestions();
+          input.focus();
+        });
+        suggList.appendChild(li);
+      }
+      suggList.hidden = false;
+    }
+
+    // Фильтрация и показ подсказок
+    function updateSuggestions() {
+      const { token } = splitValue(input.value);
+      const lower = token.toLowerCase();
+      const list = token
+        ? dataArray.filter(x => x.toLowerCase().startsWith(lower))
+        : dataArray.slice(0, 10);
+      showSuggestions(list.slice(0, 10));
+    }
+
+    // События
+    input.addEventListener('input', updateSuggestions);
+    input.addEventListener('focus', updateSuggestions);
+    document.addEventListener('click', e => {
+      if (e.target !== input && !suggList.contains(e.target)) {
+        suggList.hidden = true;
+      }
+    });
+  }
+
+  // Инициализируем мультисуггест для трёх полей
+  setupMultiSuggest('titleInput',       'titles-suggestions',     allTitles);
+  setupMultiSuggest('authorInput',      'authors-suggestions',    allAuthors);
+  setupMultiSuggest('categoriesInput',  'categories-suggestions', allCategories);
+</script>
+</body>
+</html>

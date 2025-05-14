@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Авторы - Digital Gallery</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .works-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 20px;
+        }
+        /* Контейнер чекбокса */
+            .checkbox-container {
+              display: flex;
+              align-items: left;
+              margin-bottom: 3px;
+              cursor: default;
+            }
+
+            /* Сам чекбокс */
+            .checkbox-container input[type="checkbox"] {
+              appearance: none;
+              -webkit-appearance: none;
+              -moz-appearance: none;
+              width: 25px;
+              height: 25px;
+              border: 2px solid #2e2e2e;
+              border-radius: 4px;
+              margin-right: 10px;
+              position: relative;
+              outline: none;
+              cursor: pointer;
+              transition: background-color 0.2s, border-color 0.2s;
+            }
+
+            /* Стили при активации чекбокса */
+            .checkbox-container input[type="checkbox"]:checked {
+              background: linear-gradient(135deg, #bbb, #999999);
+            }
+
+            /* Текст рядом с чекбоксом */
+            .checkbox-container label {
+              cursor: pointer;
+              color: #cccccc;
+              font-size: 1rem;
+            }
+            .no-redirect {
+                cursor: default;
+            }
+            .author-card p {
+              color: #fff;
+              text-shadow:
+                 0 1px 2px rgba(0, 0, 0, 0.8),
+                 0 0 4px rgba(0, 0, 0, 0.6);
+            }
+    </style>
+</head>
+<body>
+<!-- Меню -->
+{% include 'header.html' %}
+
+<!-- Форма фильтрации авторов -->
+<form id="filterForm" method="get" action="{{ url_for('authors') }}">
+    <section class="reveal" id="authorFilterSection" style="z-index: 10;">
+        <h2>Фильтрация авторов</h2>
+        <div class="filter-group">
+            <label for="authorInput">По имени автора:</label>
+            <div style="position: relative;">
+                <input
+                        type="text"
+                        id="authorInput"
+                        name="author"
+                        autocomplete="off"
+                        placeholder="Начните вводить автора…"
+                        value="{{ author or '' }}"
+                />
+                <ul id="author-suggestions" class="suggestions" hidden></ul>
+            </div>
+
+            <div class="checkbox-container">
+                <input type="checkbox" id="popularFilter" name="popularFilter" value="on"
+                       {% if popularFilter %}checked{% endif %}>
+                <label for="popularFilter">По популярности</label>
+            </div>
+
+            <div class="checkbox-container">
+                <input type="checkbox" id="worksCountFilter" name="worksCountFilter" value="on"
+                       {% if worksCountFilter %}checked{% endif %}>
+                <label for="worksCountFilter">По количеству работ</label>
+            </div>
+        </div>
+    </section>
+</form>
+
+<!-- Секция авторов -->
+<section class="reveal" id="authorsSection">
+    <h2>Список авторов</h2>
+    <div class="works-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); align-items: start;">
+        {% for item in authors %}
+        <div class="author-card" data-link="{{ url_for('profile', user_id=item.user.id) }}">
+            <div class="image-container">
+                <img src="{{ url_for('static', filename='img/cards/' ~ item.user.id ~ item.user.card_ext) }}"
+                     onerror="this.closest('.author-card').classList.add('default-bg');"
+                     alt=""
+                     class="author-image">
+            </div>
+            <h3 class="no-redirect">{{item.user.nick_name}}</h3>
+            <p class="no-redirect">Работ: {{item.works_count}} | Просмотров: {{item.total_views}}</p>
+            <div class="popular-works">
+                {% for work in item.popular_works %}
+                <div class="work-item no-redirect">
+                    <p style="text-align: left; margin: 0; padding: 2px 4px;">{{work.name}} – {{work.views}} просмотров</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<script>
+    window.addEventListener("load", () => {
+      const reveals = document.querySelectorAll(".reveal");
+      reveals.forEach(el => el.classList.add("active"));
+    });
+
+    const form = document.getElementById("filterForm");
+
+    // Реагирование на чекбокс
+    const checkboxIds = ["popularFilter", "worksCountFilter"];
+    checkboxIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", () => {
+                form.submit();
+            });
+        }
+    });
+
+    // Реагирование на нажатие Enter
+    const authorInput = document.getElementById("authorNameFilter");
+        if (authorInput) {
+            authorInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    form.submit();
+                }
+            });
+        }
+
+    document.querySelectorAll('.author-card').forEach(card => {
+        card.addEventListener('click', function (e) {
+            // Если кликнули по элементу с классом .no-redirect — не переходим
+            if (!e.target.closest('.no-redirect')) {
+                const url = card.getAttribute('data-link');
+                if (url) {
+                    window.location.href = url;
+                }
+            }
+        });
+    });
+
+    // список из сервера
+    const allCats = {{ allAuthors|tojson }};
+
+    const input    = document.getElementById('authorInput');
+    const suggList = document.getElementById('author-suggestions');
+
+    function splitValue(val) {
+      const parts = val.split(',');
+      return {
+        prefix: parts.slice(0, -1).join(',').trim(),
+        token: parts.pop().trim()
+      };
+    }
+
+    function showSuggestions(arr) {
+      suggList.innerHTML = '';
+      if (!arr.length) return suggList.hidden = true;
+      for (const item of arr) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        li.addEventListener('mousedown', () => {
+          const { prefix } = splitValue(input.value);
+          input.value = prefix
+            ? `${prefix}, ${item}, `
+            : `${item}, `;
+          update(); // заново показать список для пустого токена
+          input.focus();
+        });
+        suggList.appendChild(li);
+      }
+      suggList.hidden = false;
+    }
+
+    function update() {
+      const { token } = splitValue(input.value);
+      let list = token
+        ? allCats.filter(c => c.toLowerCase().startsWith(token.toLowerCase()))
+        : allCats;
+      showSuggestions(list.slice(0, 10));
+    }
+
+    input.addEventListener('input', update);
+    input.addEventListener('focus', update);
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !suggList.contains(e.target)) {
+        suggList.hidden = true;
+      }
+    });
+</script>
+</body>
+</html>
