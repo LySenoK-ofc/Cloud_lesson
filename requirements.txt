@@ -1,0 +1,11 @@
+asyncio
+SQLAlchemy
+sqlalchemy-serializer
+Werkzeug
+Flask
+flask-restful
+flask-login
+email_validator
+aiogram
+requests
+aiohttp
